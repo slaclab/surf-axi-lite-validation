@@ -1,13 +1,13 @@
 -------------------------------------------------------------------------------
 -- Company    : SLAC National Accelerator Laboratory
 -------------------------------------------------------------------------------
--- Description: Simulation Testbed for testing the SurfAxiLiteProtocolCheckerTb module
+-- Description: Simulation Testbed for testing the SurfAxiLiteProtocolChecker module
 -------------------------------------------------------------------------------
--- This file is part of 'SLAC Firmware Standard Library'.
+-- This file is part of 'surf-axi-protcol-checking'.
 -- It is subject to the license terms in the LICENSE.txt file found in the
 -- top-level directory of this distribution and at:
 --    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
--- No part of 'SLAC Firmware Standard Library', including this file,
+-- No part of 'surf-axi-protcol-checking', including this file,
 -- may be copied, modified, propagated, or distributed except according to
 -- the terms contained in the LICENSE.txt file.
 -------------------------------------------------------------------------------
@@ -63,33 +63,31 @@ architecture testbed of SurfAxiLiteProtocolCheckerTb is
       gitHash     => x"1111_2222_3333_4444_5555_6666_7777_8888_9999_AAAA");  -- Force githash
    constant SIM_BUILD_INFO_C : slv(2239 downto 0) := toSlv(MOD_BUILD_INFO_C);
 
-   constant CLK_PERIOD_G : time := 10 ns;
-   constant TPD_G        : time := CLK_PERIOD_G/4;
+   constant CLK_PERIOD_C : time := 10 ns;
+   constant TPD_G        : time := CLK_PERIOD_C/4;
 
    constant NUM_AXIL_MASTERS_C : natural := 1;
 
    constant AXIL_XBAR_CONFIG_C : AxiLiteCrossbarMasterConfigArray(NUM_AXIL_MASTERS_C-1 downto 0) := genAxiLiteConfig(NUM_AXIL_MASTERS_C, x"0000_0000", 20, 16);
 
    signal axilClk  : sl := '0';
-   signal axilRst  : sl := '0';
-   signal axilRstL : sl := '1';
+   signal axilRst  : sl := '1';
+   signal axilRstL : sl := '0';
+   signal done     : sl := '0';
 
-   signal axilWriteMaster : AxiLiteWriteMasterType := AXI_LITE_WRITE_MASTER_INIT_C;
-   signal axilWriteSlave  : AxiLiteWriteSlaveType  := AXI_LITE_WRITE_SLAVE_INIT_C;
-
-   signal axilReadMaster : AxiLiteReadMasterType := AXI_LITE_READ_MASTER_INIT_C;
-   signal axilReadSlave  : AxiLiteReadSlaveType  := AXI_LITE_READ_SLAVE_INIT_C;
+   signal mAxilWriteMasters : AxiLiteWriteMasterArray(1 downto 0) := (others => AXI_LITE_WRITE_MASTER_INIT_C);
+   signal mAxilWriteSlaves  : AxiLiteWriteSlaveArray(1 downto 0)  := (others => AXI_LITE_WRITE_SLAVE_INIT_C);
+   signal mAxilReadMasters  : AxiLiteReadMasterArray(1 downto 0)  := (others => AXI_LITE_READ_MASTER_INIT_C);
+   signal mAxilReadSlaves   : AxiLiteReadSlaveArray(1 downto 0)   := (others => AXI_LITE_READ_SLAVE_INIT_C);
 
    signal axilWriteMasters : AxiLiteWriteMasterArray(NUM_AXIL_MASTERS_C-1 downto 0) := (others => AXI_LITE_WRITE_MASTER_INIT_C);
    signal axilWriteSlaves  : AxiLiteWriteSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)  := (others => AXI_LITE_WRITE_SLAVE_INIT_C);
-   -- signal axilWriteSlaves  : AxiLiteWriteSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)  := (others => AXI_LITE_WRITE_SLAVE_EMPTY_DECERR_C);
 
    signal axilReadMasters : AxiLiteReadMasterArray(NUM_AXIL_MASTERS_C-1 downto 0) := (others => AXI_LITE_READ_MASTER_INIT_C);
    signal axilReadSlaves  : AxiLiteReadSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)  := (others => AXI_LITE_READ_SLAVE_INIT_C);
-   -- signal axilReadSlaves   : AxiLiteReadSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)   := (others => AXI_LITE_READ_SLAVE_EMPTY_DECERR_C);
 
-   signal pc_status   : Slv160Array(NUM_AXIL_MASTERS_C downto 0) := (others => (others => '0'));
-   signal pc_asserted : slv(NUM_AXIL_MASTERS_C downto 0)         := (others => '0');
+   signal pc_status   : Slv160Array(NUM_AXIL_MASTERS_C+1 downto 0) := (others => (others => '0'));
+   signal pc_asserted : slv(NUM_AXIL_MASTERS_C+1 downto 0)         := (others => '0');
 
 begin
 
@@ -98,17 +96,17 @@ begin
    --------------------
    U_axilClk : entity surf.ClkRst
       generic map (
-         CLK_PERIOD_G      => CLK_PERIOD_G,
+         CLK_PERIOD_G      => CLK_PERIOD_C,
          RST_START_DELAY_G => 0 ns,
-         RST_HOLD_TIME_G   => 10 us)
+         RST_HOLD_TIME_G   => 1 us)
       port map (
          clkP => axilClk,
          rst  => axilRst,
          rstL => axilRstL);
 
-   ---------------------------------
-   -- AXI-Lite Register Transactions
-   ---------------------------------
+   ------------------------------------------------------------------------------------------------
+   -- AXI-Lite Register Transactions via axiLiteBusSimRead/axiLiteBusSimWrite simulation procedures 
+   ------------------------------------------------------------------------------------------------
    test : process is
       variable debugData : slv(31 downto 0) := (others => '0');
    begin
@@ -119,11 +117,19 @@ begin
       wait until axilRst = '1';
       wait until axilRst = '0';
 
-      -- Get the FW Version from correct location
-      axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"0000_0000", debugData, true);
+      -- -- Access mapped region
+      -- axiLiteBusSimRead (axilClk, mAxilReadMasters(0), mAxilReadSlaves(0), x"0000_0000", debugData, true);
+      -- axiLiteBusSimRead (axilClk, mAxilReadMasters(0), mAxilReadSlaves(0), x"0000_0004", debugData, true);
+      -- axiLiteBusSimRead (axilClk, mAxilReadMasters(0), mAxilReadSlaves(0), x"0000_0000", debugData, true);
+      -- axiLiteBusSimRead (axilClk, mAxilReadMasters(0), mAxilReadSlaves(0), x"0000_0004", debugData, true);
 
-      -- Get the FW Version from wrong location
-      axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"8000_0000", debugData, true);
+      -- -- Access unmapped region
+      -- axiLiteBusSimRead (axilClk, mAxilReadMasters(0), mAxilReadSlaves(0), x"8000_0000", debugData, true);
+
+      ---------------------------------------
+      -- Synchronize with AxiLiteMasterTester
+      ---------------------------------------
+      wait until done = '1';
 
       -----------------------------
       -- Check if simulation passed
@@ -138,6 +144,22 @@ begin
 
    end process test;
 
+   -------------------------------------------------------------------
+   -- AXI-Lite Register Transactions via surf.AxiLiteMaster RTL module 
+   -------------------------------------------------------------------
+   U_AxiLiteMasterTester : entity work.AxiLiteMasterTester
+      generic map (
+         TPD_G => TPD_G)
+      port map (
+         done             => done,
+         -- AXI-Lite Register Interface (sysClk domain)
+         axilClk          => axilClk,
+         axilRst          => axilRst,
+         mAxilReadMaster  => mAxilReadMasters(1),
+         mAxilReadSlave   => mAxilReadSlaves(1),
+         mAxilWriteMaster => mAxilWriteMasters(1),
+         mAxilWriteSlave  => mAxilWriteSlaves(1));
+
    --------------------
    -- AXI-Lite Crossbar
    --------------------
@@ -146,55 +168,57 @@ begin
          TPD_G              => TPD_G,
          DEC_ERROR_RESP_G   => AXI_RESP_DECERR_C,
          -- DEC_ERROR_RESP_G   => AXI_RESP_OK_C,
-         NUM_SLAVE_SLOTS_G  => 1,
+         NUM_SLAVE_SLOTS_G  => 2,
          NUM_MASTER_SLOTS_G => NUM_AXIL_MASTERS_C,
          MASTERS_CONFIG_G   => AXIL_XBAR_CONFIG_C)
       port map (
-         axiClk              => axilClk,
-         axiClkRst           => axilRst,
-         sAxiWriteMasters(0) => axilWriteMaster,
-         sAxiWriteSlaves(0)  => axilWriteSlave,
-         sAxiReadMasters(0)  => axilReadMaster,
-         sAxiReadSlaves(0)   => axilReadSlave,
-         mAxiWriteMasters    => axilWriteMasters,
-         mAxiWriteSlaves     => axilWriteSlaves,
-         mAxiReadMasters     => axilReadMasters,
-         mAxiReadSlaves      => axilReadSlaves);
+         axiClk           => axilClk,
+         axiClkRst        => axilRst,
+         sAxiWriteMasters => mAxilWriteMasters,
+         sAxiWriteSlaves  => mAxilWriteSlaves,
+         sAxiReadMasters  => mAxilReadMasters,
+         sAxiReadSlaves   => mAxilReadSlaves,
+         mAxiWriteMasters => axilWriteMasters,
+         mAxiWriteSlaves  => axilWriteSlaves,
+         mAxiReadMasters  => axilReadMasters,
+         mAxiReadSlaves   => axilReadSlaves);
 
    ----------------------------
    -- AXI-Lite Protocol Checker
    ----------------------------
-   U_Checker : AxiLiteProtocolChecker
-      port map (
-         pc_status      => pc_status(0),
-         pc_asserted    => pc_asserted(0),
-         aclk           => axilClk,
-         aresetn        => axilRstL,
-         pc_axi_awaddr  => axilWriteMaster.awaddr,
-         pc_axi_awprot  => axilWriteMaster.awprot,
-         pc_axi_awvalid => axilWriteMaster.awvalid,
-         pc_axi_wdata   => axilWriteMaster.wdata,
-         pc_axi_wstrb   => axilWriteMaster.wstrb,
-         pc_axi_wvalid  => axilWriteMaster.wvalid,
-         pc_axi_bready  => axilWriteMaster.bready,
-         pc_axi_awready => axilWriteSlave.awready,
-         pc_axi_wready  => axilWriteSlave.wready,
-         pc_axi_bresp   => axilWriteSlave.bresp,
-         pc_axi_bvalid  => axilWriteSlave.bvalid,
-         pc_axi_araddr  => axilReadMaster.araddr,
-         pc_axi_arprot  => axilReadMaster.arprot,
-         pc_axi_arvalid => axilReadMaster.arvalid,
-         pc_axi_rready  => axilReadMaster.rready,
-         pc_axi_arready => axilReadSlave.arready,
-         pc_axi_rdata   => axilReadSlave.rdata,
-         pc_axi_rresp   => axilReadSlave.rresp,
-         pc_axi_rvalid  => axilReadSlave.rvalid);
-
-   GEN_VEC : for i in NUM_AXIL_MASTERS_C-1 downto 0 generate
+   GEN_SRC : for i in 1 downto 0 generate
       U_Checker : AxiLiteProtocolChecker
          port map (
-            pc_status      => pc_status(i+1),
-            pc_asserted    => pc_asserted(i+1),
+            pc_status      => pc_status(i),
+            pc_asserted    => pc_asserted(i),
+            aclk           => axilClk,
+            aresetn        => axilRstL,
+            pc_axi_awaddr  => mAxilWriteMasters(i).awaddr,
+            pc_axi_awprot  => mAxilWriteMasters(i).awprot,
+            pc_axi_awvalid => mAxilWriteMasters(i).awvalid,
+            pc_axi_wdata   => mAxilWriteMasters(i).wdata,
+            pc_axi_wstrb   => mAxilWriteMasters(i).wstrb,
+            pc_axi_wvalid  => mAxilWriteMasters(i).wvalid,
+            pc_axi_bready  => mAxilWriteMasters(i).bready,
+            pc_axi_awready => mAxilWriteSlaves(i).awready,
+            pc_axi_wready  => mAxilWriteSlaves(i).wready,
+            pc_axi_bresp   => mAxilWriteSlaves(i).bresp,
+            pc_axi_bvalid  => mAxilWriteSlaves(i).bvalid,
+            pc_axi_araddr  => mAxilReadMasters(i).araddr,
+            pc_axi_arprot  => mAxilReadMasters(i).arprot,
+            pc_axi_arvalid => mAxilReadMasters(i).arvalid,
+            pc_axi_rready  => mAxilReadMasters(i).rready,
+            pc_axi_arready => mAxilReadSlaves(i).arready,
+            pc_axi_rdata   => mAxilReadSlaves(i).rdata,
+            pc_axi_rresp   => mAxilReadSlaves(i).rresp,
+            pc_axi_rvalid  => mAxilReadSlaves(i).rvalid);
+   end generate GEN_SRC;
+
+   GEN_DST : for i in NUM_AXIL_MASTERS_C-1 downto 0 generate
+      U_Checker : AxiLiteProtocolChecker
+         port map (
+            pc_status      => pc_status(i+2),
+            pc_asserted    => pc_asserted(i+2),
             aclk           => axilClk,
             aresetn        => axilRstL,
             pc_axi_awaddr  => axilWriteMasters(i).awaddr,
@@ -216,7 +240,7 @@ begin
             pc_axi_rdata   => axilReadSlaves(i).rdata,
             pc_axi_rresp   => axilReadSlaves(i).rresp,
             pc_axi_rvalid  => axilReadSlaves(i).rvalid);
-   end generate GEN_VEC;
+   end generate GEN_DST;
 
    ---------------------
    -- AXI-Lite End Point

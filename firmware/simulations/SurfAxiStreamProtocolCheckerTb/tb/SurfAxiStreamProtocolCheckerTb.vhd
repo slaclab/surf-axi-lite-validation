@@ -1,13 +1,13 @@
 -------------------------------------------------------------------------------
 -- Company    : SLAC National Accelerator Laboratory
 -------------------------------------------------------------------------------
--- Description: Simulation Testbed for testing the SurfAxiStreamProtocolCheckerTb module
+-- Description: Simulation Testbed for testing the SurfAxiStreamProtocolChecker module
 -------------------------------------------------------------------------------
--- This file is part of 'SLAC Firmware Standard Library'.
+-- This file is part of 'surf-axi-protcol-checking'.
 -- It is subject to the license terms in the LICENSE.txt file found in the
 -- top-level directory of this distribution and at:
 --    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
--- No part of 'SLAC Firmware Standard Library', including this file,
+-- No part of 'surf-axi-protcol-checking', including this file,
 -- may be copied, modified, propagated, or distributed except according to
 -- the terms contained in the LICENSE.txt file.
 -------------------------------------------------------------------------------
@@ -95,6 +95,33 @@ begin
          rst  => axilRst,
          rstL => axilRstL);
 
+
+
+
+
+
+
+
+
+   GEN_VEC : for i in NUM_AXIS_C-1 downto 0 generate
+      U_Checker : AxiStreamProtocolChecker
+     PORT MAP (
+       aclk => aclk,
+       aresetn => axilRstL,
+       pc_axis_tvalid => pc_axis_tvalid,
+       pc_axis_tready => pc_axis_tready,
+       pc_axis_tdata => pc_axis_tdata,
+       pc_axis_tstrb => pc_axis_tstrb,
+       pc_axis_tkeep => pc_axis_tkeep,
+       pc_axis_tlast => pc_axis_tlast,
+       pc_axis_tid => pc_axis_tid,
+       pc_axis_tdest => pc_axis_tdest,
+       pc_axis_tuser => pc_axis_tuser,
+       pc_asserted => pc_asserted,
+       pc_status => pc_status
+     );
+   end generate GEN_VEC;
+
    ---------------------------------
    -- AXI-Lite Register Transactions
    ---------------------------------
@@ -130,89 +157,8 @@ begin
 
    end process test;
 
-   --------------------
-   -- AXI-Lite Crossbar
-   --------------------
-   U_XBAR : entity surf.AxiLiteCrossbar
-      generic map (
-         TPD_G              => TPD_G,
-         NUM_SLAVE_SLOTS_G  => 1,
-         NUM_MASTER_SLOTS_G => NUM_AXIL_MASTERS_C,
-         MASTERS_CONFIG_G   => AXIL_XBAR_CONFIG_C)
-      port map (
-         axiClk              => axilClk,
-         axiClkRst           => axilRst,
-         sAxiWriteMasters(0) => axilWriteMaster,
-         sAxiWriteSlaves(0)  => axilWriteSlave,
-         sAxiReadMasters(0)  => axilReadMaster,
-         sAxiReadSlaves(0)   => axilReadSlave,
-         mAxiWriteMasters    => axilWriteMasters,
-         mAxiWriteSlaves     => axilWriteSlaves,
-         mAxiReadMasters     => axilReadMasters,
-         mAxiReadSlaves      => axilReadSlaves);
 
-   ----------------------------
-   -- AXI-Lite Protocol Checker
-   ----------------------------
-   U_Checker : AxiLiteProtocolChecker
-      port map (
-         pc_status      => open,
-         pc_asserted    => asserted(0),
-         aclk           => axilClk,
-         aresetn        => axilRstL,
-         pc_axi_awaddr  => axilWriteMaster.awaddr,
-         pc_axi_awprot  => axilWriteMaster.awprot,
-         pc_axi_awvalid => axilWriteMaster.awvalid,
-         pc_axi_wdata   => axilWriteMaster.wdata,
-         pc_axi_wstrb   => axilWriteMaster.wstrb,
-         pc_axi_wvalid  => axilWriteMaster.wvalid,
-         pc_axi_bready  => axilWriteMaster.bready,
-         pc_axi_awready => axilWriteSlave.awready,
-         pc_axi_wready  => axilWriteSlave.wready,
-         pc_axi_bresp   => axilWriteSlave.bresp,
-         pc_axi_bvalid  => axilWriteSlave.bvalid,
-         pc_axi_araddr  => axilReadMaster.araddr,
-         pc_axi_arprot  => axilReadMaster.arprot,
-         pc_axi_arvalid => axilReadMaster.arvalid,
-         pc_axi_rready  => axilReadMaster.rready,
-         pc_axi_arready => axilReadSlave.arready,
-         pc_axi_rdata   => axilReadSlave.rdata,
-         pc_axi_rresp   => axilReadSlave.rresp,
-         pc_axi_rvalid  => axilReadSlave.rvalid);
 
-   GEN_VEC : for i in NUM_AXIL_MASTERS_C-1 downto 0 generate
-      U_Checker : AxiStreamProtocolChecker
-     PORT MAP (
-       aclk => aclk,
-       aresetn => axilRstL,
-       pc_axis_tvalid => pc_axis_tvalid,
-       pc_axis_tready => pc_axis_tready,
-       pc_axis_tdata => pc_axis_tdata,
-       pc_axis_tstrb => pc_axis_tstrb,
-       pc_axis_tkeep => pc_axis_tkeep,
-       pc_axis_tlast => pc_axis_tlast,
-       pc_axis_tid => pc_axis_tid,
-       pc_axis_tdest => pc_axis_tdest,
-       pc_axis_tuser => pc_axis_tuser,
-       pc_asserted => pc_asserted,
-       pc_status => pc_status
-     );
-   end generate GEN_VEC;
 
-   ---------------------
-   -- AXI-Lite End Point
-   ---------------------
-   U_Version : entity surf.AxiVersion
-      generic map (
-         TPD_G        => TPD_G,
-         BUILD_INFO_G => SIM_BUILD_INFO_C)
-      port map (
-         -- AXI-Lite Interface
-         axiClk         => axilClk,
-         axiRst         => axilRst,
-         axiReadMaster  => axilReadMasters(0),
-         axiReadSlave   => axilReadSlaves(0),
-         axiWriteMaster => axilWriteMasters(0),
-         axiWriteSlave  => axilWriteSlaves(0));
 
 end testbed;
