@@ -88,7 +88,7 @@ architecture testbed of SurfAxiLiteProtocolCheckerTb is
    signal axilReadSlaves  : AxiLiteReadSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)  := (others => AXI_LITE_READ_SLAVE_INIT_C);
    -- signal axilReadSlaves   : AxiLiteReadSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)   := (others => AXI_LITE_READ_SLAVE_EMPTY_DECERR_C);
 
-   signal asserted : slv(2 downto 0) := (others => '0');
+   signal asserted : slv(NUM_AXIL_MASTERS_C downto 0) := (others => '0');
 
 begin
 
