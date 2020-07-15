@@ -1,7 +1,7 @@
 -------------------------------------------------------------------------------
 -- Company    : SLAC National Accelerator Laboratory
 -------------------------------------------------------------------------------
--- Description: Simulation Testbed for testing the SurfAxiLiteProtocolCheckerTb module
+-- Description: Simulation Testbed for testing the SurfAxiStreamProtocolCheckerTb module
 -------------------------------------------------------------------------------
 -- This file is part of 'SLAC Firmware Standard Library'.
 -- It is subject to the license terms in the LICENSE.txt file found in the
@@ -24,37 +24,27 @@ use surf.AxiLitePkg.all;
 library ruckus;
 use ruckus.BuildInfoPkg.all;
 
-entity SurfAxiLiteProtocolCheckerTb is end SurfAxiLiteProtocolCheckerTb;
+entity SurfAxiStreamProtocolCheckerTb is end SurfAxiStreamProtocolCheckerTb;
 
-architecture testbed of SurfAxiLiteProtocolCheckerTb is
+architecture testbed of SurfAxiStreamProtocolCheckerTb is
 
-   component AxiLiteProtocolChecker
-      port (
-         pc_status      : out std_logic_vector(159 downto 0);
-         pc_asserted    : out std_logic;
-         aclk           : in  std_logic;
-         aresetn        : in  std_logic;
-         pc_axi_awaddr  : in  std_logic_vector(31 downto 0);
-         pc_axi_awprot  : in  std_logic_vector(2 downto 0);
-         pc_axi_awvalid : in  std_logic;
-         pc_axi_awready : in  std_logic;
-         pc_axi_wdata   : in  std_logic_vector(31 downto 0);
-         pc_axi_wstrb   : in  std_logic_vector(3 downto 0);
-         pc_axi_wvalid  : in  std_logic;
-         pc_axi_wready  : in  std_logic;
-         pc_axi_bresp   : in  std_logic_vector(1 downto 0);
-         pc_axi_bvalid  : in  std_logic;
-         pc_axi_bready  : in  std_logic;
-         pc_axi_araddr  : in  std_logic_vector(31 downto 0);
-         pc_axi_arprot  : in  std_logic_vector(2 downto 0);
-         pc_axi_arvalid : in  std_logic;
-         pc_axi_arready : in  std_logic;
-         pc_axi_rdata   : in  std_logic_vector(31 downto 0);
-         pc_axi_rresp   : in  std_logic_vector(1 downto 0);
-         pc_axi_rvalid  : in  std_logic;
-         pc_axi_rready  : in  std_logic
-         );
-   end component;
+   COMPONENT AxiStreamProtocolChecker
+     PORT (
+       aclk : IN STD_LOGIC;
+       aresetn : IN STD_LOGIC;
+       pc_axis_tvalid : IN STD_LOGIC;
+       pc_axis_tready : IN STD_LOGIC;
+       pc_axis_tdata : IN STD_LOGIC_VECTOR(63 DOWNTO 0);
+       pc_axis_tstrb : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
+       pc_axis_tkeep : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
+       pc_axis_tlast : IN STD_LOGIC;
+       pc_axis_tid : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+       pc_axis_tdest : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+       pc_axis_tuser : IN STD_LOGIC_VECTOR(3 DOWNTO 0);
+       pc_asserted : OUT STD_LOGIC;
+       pc_status : OUT STD_LOGIC_VECTOR(31 DOWNTO 0)
+     );
+   END COMPONENT;
 
    constant GET_BUILD_INFO_C : BuildInfoRetType := toBuildInfo(BUILD_INFO_C);
    constant MOD_BUILD_INFO_C : BuildInfoRetType := (
@@ -88,8 +78,7 @@ architecture testbed of SurfAxiLiteProtocolCheckerTb is
    signal axilReadSlaves  : AxiLiteReadSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)  := (others => AXI_LITE_READ_SLAVE_INIT_C);
    -- signal axilReadSlaves   : AxiLiteReadSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)   := (others => AXI_LITE_READ_SLAVE_EMPTY_DECERR_C);
 
-   signal pc_status   : Slv160Array(NUM_AXIL_MASTERS_C downto 0) := (others => (others => '0'));
-   signal pc_asserted : slv(NUM_AXIL_MASTERS_C downto 0)         := (others => '0');
+   signal asserted : slv(NUM_AXIL_MASTERS_C downto 0) := (others => '0');
 
 begin
 
@@ -100,7 +89,7 @@ begin
       generic map (
          CLK_PERIOD_G      => CLK_PERIOD_G,
          RST_START_DELAY_G => 0 ns,
-         RST_HOLD_TIME_G   => 10 us)
+         RST_HOLD_TIME_G   => 1000 ns)
       port map (
          clkP => axilClk,
          rst  => axilRst,
@@ -119,16 +108,19 @@ begin
       wait until axilRst = '1';
       wait until axilRst = '0';
 
-      -- Get the FW Version from correct location
+      -- Get the FW Version
       axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"0000_0000", debugData, true);
 
       -- Get the FW Version from wrong location
       axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"8000_0000", debugData, true);
 
+      -- Get the FW Version again
+      axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"0000_0000", debugData, true);
+
       -----------------------------
       -- Check if simulation passed
       -----------------------------
-      if pc_asserted = 0 then
+      if asserted = 0 then
          assert false
             report "Simulation Passed!" severity failure;
       else
@@ -144,8 +136,6 @@ begin
    U_XBAR : entity surf.AxiLiteCrossbar
       generic map (
          TPD_G              => TPD_G,
-         DEC_ERROR_RESP_G   => AXI_RESP_DECERR_C,
-         -- DEC_ERROR_RESP_G   => AXI_RESP_OK_C,
          NUM_SLAVE_SLOTS_G  => 1,
          NUM_MASTER_SLOTS_G => NUM_AXIL_MASTERS_C,
          MASTERS_CONFIG_G   => AXIL_XBAR_CONFIG_C)
@@ -166,8 +156,8 @@ begin
    ----------------------------
    U_Checker : AxiLiteProtocolChecker
       port map (
-         pc_status      => pc_status(0),
-         pc_asserted    => pc_asserted(0),
+         pc_status      => open,
+         pc_asserted    => asserted(0),
          aclk           => axilClk,
          aresetn        => axilRstL,
          pc_axi_awaddr  => axilWriteMaster.awaddr,
@@ -191,31 +181,22 @@ begin
          pc_axi_rvalid  => axilReadSlave.rvalid);
 
    GEN_VEC : for i in NUM_AXIL_MASTERS_C-1 downto 0 generate
-      U_Checker : AxiLiteProtocolChecker
-         port map (
-            pc_status      => pc_status(i+1),
-            pc_asserted    => pc_asserted(i+1),
-            aclk           => axilClk,
-            aresetn        => axilRstL,
-            pc_axi_awaddr  => axilWriteMasters(i).awaddr,
-            pc_axi_awprot  => axilWriteMasters(i).awprot,
-            pc_axi_awvalid => axilWriteMasters(i).awvalid,
-            pc_axi_wdata   => axilWriteMasters(i).wdata,
-            pc_axi_wstrb   => axilWriteMasters(i).wstrb,
-            pc_axi_wvalid  => axilWriteMasters(i).wvalid,
-            pc_axi_bready  => axilWriteMasters(i).bready,
-            pc_axi_awready => axilWriteSlaves(i).awready,
-            pc_axi_wready  => axilWriteSlaves(i).wready,
-            pc_axi_bresp   => axilWriteSlaves(i).bresp,
-            pc_axi_bvalid  => axilWriteSlaves(i).bvalid,
-            pc_axi_araddr  => axilReadMasters(i).araddr,
-            pc_axi_arprot  => axilReadMasters(i).arprot,
-            pc_axi_arvalid => axilReadMasters(i).arvalid,
-            pc_axi_rready  => axilReadMasters(i).rready,
-            pc_axi_arready => axilReadSlaves(i).arready,
-            pc_axi_rdata   => axilReadSlaves(i).rdata,
-            pc_axi_rresp   => axilReadSlaves(i).rresp,
-            pc_axi_rvalid  => axilReadSlaves(i).rvalid);
+      U_Checker : AxiStreamProtocolChecker
+     PORT MAP (
+       aclk => aclk,
+       aresetn => axilRstL,
+       pc_axis_tvalid => pc_axis_tvalid,
+       pc_axis_tready => pc_axis_tready,
+       pc_axis_tdata => pc_axis_tdata,
+       pc_axis_tstrb => pc_axis_tstrb,
+       pc_axis_tkeep => pc_axis_tkeep,
+       pc_axis_tlast => pc_axis_tlast,
+       pc_axis_tid => pc_axis_tid,
+       pc_axis_tdest => pc_axis_tdest,
+       pc_axis_tuser => pc_axis_tuser,
+       pc_asserted => pc_asserted,
+       pc_status => pc_status
+     );
    end generate GEN_VEC;
 
    ---------------------
