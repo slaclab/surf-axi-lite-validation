@@ -120,12 +120,23 @@ begin
 
       -- Get the FW Version
       axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"0000_0000", debugData, true);
-      
+
       -- Get the FW Version from wrong location
       axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"8000_0000", debugData, true);
 
       -- Get the FW Version again
-      axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"0000_0000", debugData, true);      
+      axiLiteBusSimRead (axilClk, axilReadMaster, axilReadSlave, x"0000_0000", debugData, true);
+
+      -----------------------------
+      -- Check if simulation passed
+      -----------------------------
+      if asserted = 0 then
+         assert false
+            report "Simulation Passed!" severity failure;
+      else
+         assert false
+            report "Simulation Failed!" severity failure;
+      end if;
 
    end process test;
 
