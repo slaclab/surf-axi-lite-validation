@@ -18,11 +18,13 @@ use ieee.std_logic_unsigned.all;
 library surf;
 use surf.StdRtlPkg.all;
 use surf.AxiLitePkg.all;
+use surf.TextUtilPkg.all;
 
 entity AxiLiteMasterTester is
    generic (
       TPD_G : time := 1 ns);
    port (
+      enable           : in sl;
       done             : out sl;
       -- AXI-Lite Register Interface (sysClk domain)
       axilClk          : in  sl;
@@ -92,7 +94,7 @@ begin
          ----------------------------------------------------------------------
          when REQ_S =>
             -- Check if ready for next transaction
-            if (ack.done = '0') then
+            if (ack.done = '0') and (enable = '1') then
 
                -- Setup the AXI-Lite Master request
                v.req.request := '1';
@@ -100,6 +102,7 @@ begin
                -- Default to read
                v.req.rnw := '1';
 
+               -- Types of Transactions
                case (r.cnt) is
                   when x"00"  => v.req.address := x"0000_0000";
                   when x"01"  => v.req.address := x"0000_0004";
@@ -122,6 +125,9 @@ begin
                if (r.req.rnw = '1') then
                   v.data := ack.rdData;
                end if;
+
+               -- Print for debugging
+               print(true, "AxiLiteMasterTester:Completed( cnt:" & hstr(r.cnt) & ")");
 
                -- Check for max count
                if (r.cnt /= MAX_CNT_C) then
