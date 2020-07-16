@@ -22,10 +22,11 @@ use surf.TextUtilPkg.all;
 
 entity AxiLiteMasterTester is
    generic (
-      TPD_G : time := 1 ns);
+      TPD_G   : time     := 1 ns;
+      INDEX_G : positive := 1);
    port (
-      enable           : in sl;
       done             : out sl;
+      failed           : out sl;
       -- AXI-Lite Register Interface (sysClk domain)
       axilClk          : in  sl;
       axilRst          : in  sl;
@@ -45,19 +46,21 @@ architecture rtl of AxiLiteMasterTester is
       DONE_S);
 
    type RegType is record
-      done  : sl;
-      cnt   : slv(7 downto 0);
-      req   : AxiLiteReqType;
-      state : StateType;
-      data  : slv(31 downto 0);
+      failed : sl;
+      done   : sl;
+      cnt    : slv(7 downto 0);
+      req    : AxiLiteReqType;
+      state  : StateType;
+      data   : slv(31 downto 0);
    end record;
 
    constant REG_INIT_C : RegType := (
-      done  => '0',
-      cnt   => x"00",
-      req   => AXI_LITE_REQ_INIT_C,
-      state => REQ_S,
-      data  => (others => '0'));
+      failed => '0',
+      done   => '0',
+      cnt    => x"00",
+      req    => AXI_LITE_REQ_INIT_C,
+      state  => REQ_S,
+      data   => (others => '0'));
 
    signal r   : RegType := REG_INIT_C;
    signal rin : RegType;
@@ -94,23 +97,18 @@ begin
          ----------------------------------------------------------------------
          when REQ_S =>
             -- Check if ready for next transaction
-            if (ack.done = '0') and (enable = '1') then
+            if (ack.done = '0') then
 
                -- Setup the AXI-Lite Master request
                v.req.request := '1';
 
-               -- Default to read
-               v.req.rnw := '1';
+               -- Setup the Address
+               v.req.address(15 downto 2)  := resize(r.cnt, 14);
+               v.req.address(31 downto 16) := toSlv(INDEX_G, 16);
 
-               -- Types of Transactions
-               case (r.cnt) is
-                  when x"00"  => v.req.address := x"0000_0000";
-                  when x"01"  => v.req.address := x"0000_0004";
-                  when x"02"  => v.req.address := x"0000_0000";
-                  when x"03"  => v.req.address := x"0000_0004";
-                  when x"04"  => v.req.address := x"8000_0000";  -- Unmapped region
-                  when others => v.req.address := x"0000_0004";
-               end case;
+               -- Setup the data
+               v.req.wrData(15 downto 0)  := resize(r.cnt+1, 16);
+               v.req.wrData(31 downto 16) := toSlv(INDEX_G, 16);
 
                -- Next state
                v.state := ACK_S;
@@ -122,26 +120,43 @@ begin
 
                -- Reset the flag
                v.req.request := '0';
-               if (r.req.rnw = '1') then
-                  v.data := ack.rdData;
+
+               -- Check for wrong read data
+               if (r.req.rnw = '1') and (ack.rdData /= r.req.wrData) then
+                  v.failed := '1';
                end if;
 
-               -- Print for debugging
-               print(true, "AxiLiteMasterTester:Completed( cnt:" & hstr(r.cnt) & ")");
+               -- Check for error response
+               if (ack.resp /= 0) then
+                  v.failed := '1';
+               end if;
+
+               -- Increment the counter
+               v.cnt := r.cnt + 1;
 
                -- Check for max count
-               if (r.cnt /= MAX_CNT_C) then
+               if (r.cnt = x"FF") then
 
-                  -- Increment the counter
-                  v.cnt := r.cnt + 1;
+                  -- Check if write mode
+                  if (r.req.rnw = '0') then
 
-                  -- Next state
-                  v.state := REQ_S;
+                     -- Switch to read mode
+                     v.req.rnw := '1';
+
+                     -- Next state
+                     v.state := REQ_S;
+
+                  else
+
+                     -- Next state
+                     v.state := DONE_S;
+
+                  end if;
 
                else
 
                   -- Next state
-                  v.state := DONE_S;
+                  v.state := REQ_S;
 
                end if;
             end if;
@@ -152,11 +167,14 @@ begin
       end case;
 
       -- Outputs
-      done <= r.done;
+      done   <= r.done;
+      failed <= r.failed;
 
       -- Reset
       if (axilRst = '1') then
-         v := REG_INIT_C;
+         v         := REG_INIT_C;
+         -- Default to write first
+         v.req.rnw := '0';
       end if;
 
       -- Register the variable for next clock cycle
