@@ -1,11 +1,11 @@
 -------------------------------------------------------------------------------
 -- Company    : SLAC National Accelerator Laboratory
 -------------------------------------------------------------------------------
--- This file is part of 'surf-axi-protcol-checking'.
+-- This file is part of 'surf-axi-protocol-checking'.
 -- It is subject to the license terms in the LICENSE.txt file found in the
 -- top-level directory of this distribution and at:
 --    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
--- No part of 'surf-axi-protcol-checking', including this file,
+-- No part of 'surf-axi-protocol-checking', including this file,
 -- may be copied, modified, propagated, or distributed except according to
 -- the terms contained in the LICENSE.txt file.
 -------------------------------------------------------------------------------
@@ -22,8 +22,8 @@ use surf.TextUtilPkg.all;
 
 entity AxiLiteMasterTester is
    generic (
-      TPD_G   : time     := 1 ns;
-      INDEX_G : positive := 1);
+      TPD_G   : time    := 1 ns;
+      INDEX_G : natural := 0);
    port (
       done             : out sl;
       failed           : out sl;
