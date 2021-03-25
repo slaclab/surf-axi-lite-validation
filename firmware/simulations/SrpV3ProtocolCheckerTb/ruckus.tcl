@@ -9,7 +9,7 @@ loadRuckusTcl $::env(TOP_DIR)/submodules/surf
 
 # Load target's source code and constraints
 loadSource -sim_only -dir "$::DIR_PATH/tb"
-loadIpCore           -dir "$::DIR_PATH/ip"
+loadIpCore           -dir "$::DIR_PATH/../SurfAxiLiteProtocolCheckerTb/ip"
 
 # Set the top level synth_1 and sim_1
 set_property top {AxiVersion} [get_filesets sources_1]

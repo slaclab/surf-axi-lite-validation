@@ -61,6 +61,32 @@ architecture tb of SrpV3ProtocolCheckerTb is
          );
    end component;
 
+   component AxiLiteBramIpCore
+      port (
+         rsta_busy     : out std_logic;
+         rstb_busy     : out std_logic;
+         s_aclk        : in  std_logic;
+         s_aresetn     : in  std_logic;
+         s_axi_awaddr  : in  std_logic_vector(31 downto 0);
+         s_axi_awvalid : in  std_logic;
+         s_axi_awready : out std_logic;
+         s_axi_wdata   : in  std_logic_vector(31 downto 0);
+         s_axi_wstrb   : in  std_logic_vector(3 downto 0);
+         s_axi_wvalid  : in  std_logic;
+         s_axi_wready  : out std_logic;
+         s_axi_bresp   : out std_logic_vector(1 downto 0);
+         s_axi_bvalid  : out std_logic;
+         s_axi_bready  : in  std_logic;
+         s_axi_araddr  : in  std_logic_vector(31 downto 0);
+         s_axi_arvalid : in  std_logic;
+         s_axi_arready : out std_logic;
+         s_axi_rdata   : out std_logic_vector(31 downto 0);
+         s_axi_rresp   : out std_logic_vector(1 downto 0);
+         s_axi_rvalid  : out std_logic;
+         s_axi_rready  : in  std_logic
+         );
+   end component;
+
    constant GET_BUILD_INFO_C : BuildInfoRetType := toBuildInfo(BUILD_INFO_C);
    constant MOD_BUILD_INFO_C : BuildInfoRetType := (
       buildString => GET_BUILD_INFO_C.buildString,
@@ -71,17 +97,9 @@ architecture tb of SrpV3ProtocolCheckerTb is
    constant CLK_PERIOD_C : time := 10 ns;
    constant TPD_G        : time := CLK_PERIOD_C/4;
 
-   constant MAX_TID_C : natural := 3;
-
    constant AXIS_CONFIG_C : AxiStreamConfigType := ssiAxiStreamConfig(AXI_STREAM_MAX_TKEEP_WIDTH_C);
 
-   constant NUM_AXIL_MASTERS_C : natural := 1;
-
-   constant VERSION_INDEX_C : natural := 0;
-
-   constant AXIL_CONFIG_C : AxiLiteCrossbarMasterConfigArray(NUM_AXIL_MASTERS_C-1 downto 0) := genAxiLiteConfig(NUM_AXIL_MASTERS_C, x"0000_0000", 16, 12);
-
-   constant NUM_AXIL_BUSES_C : positive := 2;
+   constant NUM_AXIL_BUSES_C : positive := 1;
 
    type StateType is (
       WRITE_REQ_S,
@@ -115,11 +133,6 @@ architecture tb of SrpV3ProtocolCheckerTb is
    signal axilWriteSlave  : AxiLiteWriteSlaveType  := AXI_LITE_WRITE_SLAVE_EMPTY_DECERR_C;
    signal axilReadMaster  : AxiLiteReadMasterType  := AXI_LITE_READ_MASTER_INIT_C;
    signal axilReadSlave   : AxiLiteReadSlaveType   := AXI_LITE_READ_SLAVE_EMPTY_DECERR_C;
-
-   signal axilWriteMasters : AxiLiteWriteMasterArray(NUM_AXIL_MASTERS_C-1 downto 0) := (others => AXI_LITE_WRITE_MASTER_INIT_C);
-   signal axilWriteSlaves  : AxiLiteWriteSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)  := (others => AXI_LITE_WRITE_SLAVE_EMPTY_DECERR_C);
-   signal axilReadMasters  : AxiLiteReadMasterArray(NUM_AXIL_MASTERS_C-1 downto 0)  := (others => AXI_LITE_READ_MASTER_INIT_C);
-   signal axilReadSlaves   : AxiLiteReadSlaveArray(NUM_AXIL_MASTERS_C-1 downto 0)   := (others => AXI_LITE_READ_SLAVE_EMPTY_DECERR_C);
 
    signal sAxisMaster : AxiStreamMasterType := AXI_STREAM_MASTER_INIT_C;
    signal sAxisSlave  : AxiStreamSlaveType  := AXI_STREAM_SLAVE_FORCE_C;
@@ -202,72 +215,29 @@ begin
          pc_axi_rresp   => axilReadSlave.rresp,
          pc_axi_rvalid  => axilReadSlave.rvalid);
 
-   ---------------------------
-   -- AXI-Lite Crossbar Module
-   ---------------------------
-   U_XBAR : entity surf.AxiLiteCrossbar
-      generic map (
-         TPD_G              => TPD_G,
-         NUM_SLAVE_SLOTS_G  => 1,
-         NUM_MASTER_SLOTS_G => NUM_AXIL_MASTERS_C,
-         MASTERS_CONFIG_G   => AXIL_CONFIG_C)
+   U_BRAM : AxiLiteBramIpCore
       port map (
-         axiClk              => clk,
-         axiClkRst           => rst,
-         sAxiWriteMasters(0) => axilWriteMaster,
-         sAxiWriteSlaves(0)  => axilWriteSlave,
-         sAxiReadMasters(0)  => axilReadMaster,
-         sAxiReadSlaves(0)   => axilReadSlave,
-         mAxiWriteMasters    => axilWriteMasters,
-         mAxiWriteSlaves     => axilWriteSlaves,
-         mAxiReadMasters     => axilReadMasters,
-         mAxiReadSlaves      => axilReadSlaves);
-
-   ------------------------------------
-   -- Master AXI-Lite Protocol Checking
-   ------------------------------------
-   U_SlaveChecker : AxiLiteProtocolChecker
-      port map (
-         pc_status      => pc_status(1),
-         pc_asserted    => pc_asserted(1),
-         -- system_resetn  => axilRstL,
-         aclk           => clk,
-         aresetn        => rstL,
-         pc_axi_awaddr  => axilWriteMasters(0).awaddr,
-         pc_axi_awprot  => axilWriteMasters(0).awprot,
-         pc_axi_awvalid => axilWriteMasters(0).awvalid,
-         pc_axi_wdata   => axilWriteMasters(0).wdata,
-         pc_axi_wstrb   => axilWriteMasters(0).wstrb,
-         pc_axi_wvalid  => axilWriteMasters(0).wvalid,
-         pc_axi_bready  => axilWriteMasters(0).bready,
-         pc_axi_awready => axilWriteSlaves(0).awready,
-         pc_axi_wready  => axilWriteSlaves(0).wready,
-         pc_axi_bresp   => axilWriteSlaves(0).bresp,
-         pc_axi_bvalid  => axilWriteSlaves(0).bvalid,
-         pc_axi_araddr  => axilReadMasters(0).araddr,
-         pc_axi_arprot  => axilReadMasters(0).arprot,
-         pc_axi_arvalid => axilReadMasters(0).arvalid,
-         pc_axi_rready  => axilReadMasters(0).rready,
-         pc_axi_arready => axilReadSlaves(0).arready,
-         pc_axi_rdata   => axilReadSlaves(0).rdata,
-         pc_axi_rresp   => axilReadSlaves(0).rresp,
-         pc_axi_rvalid  => axilReadSlaves(0).rvalid);
-
-
-   ---------------------------
-   -- AXI-Lite: Version Module
-   ---------------------------
-   U_AxiVersion : entity surf.AxiVersion
-      generic map (
-         TPD_G        => TPD_G,
-         BUILD_INFO_G => SIM_BUILD_INFO_C)
-      port map (
-         axiClk         => clk,
-         axiRst         => rst,
-         axiReadMaster  => axilReadMasters(VERSION_INDEX_C),
-         axiReadSlave   => axilReadSlaves(VERSION_INDEX_C),
-         axiWriteMaster => axilWriteMasters(VERSION_INDEX_C),
-         axiWriteSlave  => axilWriteSlaves(VERSION_INDEX_C));
+         rsta_busy     => open,
+         rstb_busy     => open,
+         s_aclk        => clk,
+         s_aresetn     => rstL,
+         s_axi_awaddr  => axilWriteMaster.awaddr,
+         s_axi_awvalid => axilWriteMaster.awvalid,
+         s_axi_wdata   => axilWriteMaster.wdata,
+         s_axi_wstrb   => axilWriteMaster.wstrb,
+         s_axi_wvalid  => axilWriteMaster.wvalid,
+         s_axi_bready  => axilWriteMaster.bready,
+         s_axi_awready => axilWriteSlave.awready,
+         s_axi_wready  => axilWriteSlave.wready,
+         s_axi_bresp   => axilWriteSlave.bresp,
+         s_axi_bvalid  => axilWriteSlave.bvalid,
+         s_axi_araddr  => axilReadMaster.araddr,
+         s_axi_arvalid => axilReadMaster.arvalid,
+         s_axi_rready  => axilReadMaster.rready,
+         s_axi_arready => axilReadSlave.arready,
+         s_axi_rdata   => axilReadSlave.rdata,
+         s_axi_rresp   => axilReadSlave.rresp,
+         s_axi_rvalid  => axilReadSlave.rvalid);
 
    comb : process (mAxisMaster, r, rst, sAxisSlave) is
       variable v          : RegType;
